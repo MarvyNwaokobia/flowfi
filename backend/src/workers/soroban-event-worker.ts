@@ -11,7 +11,7 @@
  *   - StreamCancelledEvent (topic: "stream_cancelled")
  */
 
-import { SorobanRpc, xdr, StrKey } from '@stellar/stellar-sdk';
+import { Soroban, xdr, StrKey } from '@stellar/stellar-sdk';
 import { prisma } from '../lib/prisma.js';
 import { sseService } from '../services/sse.service.js';
 import logger from '../logger.js';
@@ -59,7 +59,7 @@ function decodeAddress(val: xdr.ScVal): string {
   ) {
     return StrKey.encodeEd25519PublicKey(addr.accountId().ed25519());
   }
-  return StrKey.encodeContract(Buffer.from(addr.contractId()));
+  return StrKey.encodeContract(Buffer.from(addr.contractId()) as any);
 }
 
 /**
@@ -79,7 +79,7 @@ function decodeMap(val: xdr.ScVal): Record<string, xdr.ScVal> {
 // ─── Worker Class ─────────────────────────────────────────────────────────────
 
 export class SorobanEventWorker {
-  private readonly server: SorobanRpc.Server;
+  private readonly server: Soroban.Server;
   private readonly contractId: string;
   private readonly pollIntervalMs: number;
   private readonly startLedger: number;
@@ -99,7 +99,7 @@ export class SorobanEventWorker {
       process.env.INDEXER_START_LEDGER ?? '0',
       10,
     );
-    this.server = new SorobanRpc.Server(rpcUrl, { allowHttp: true });
+    this.server = new Soroban.Server(rpcUrl, { allowHttp: true });
   }
 
   /**
@@ -170,11 +170,11 @@ export class SorobanEventWorker {
         },
       ],
       limit: 100,
-    } satisfies Omit<Parameters<SorobanRpc.Server['getEvents']>[0], 'startLedger' | 'cursor'>;
+    } satisfies Omit<Parameters<Soroban.Server['getEvents']>[0], 'startLedger' | 'cursor'>;
 
     // Prefer cursor-based pagination after the first poll so we never
     // re-process events.
-    const params: Parameters<SorobanRpc.Server['getEvents']>[0] =
+    const params: Parameters<Soroban.Server['getEvents']>[0] =
       state.lastCursor
         ? { ...baseFilter, cursor: state.lastCursor }
         : { ...baseFilter, startLedger: state.lastLedger || this.startLedger };
@@ -203,7 +203,7 @@ export class SorobanEventWorker {
       }
     }
 
-    await prisma.indexerState.update({
+    await prisma.indexerState.upsert({
       where: { id: INDEXER_STATE_ID },
       create: {
         id: INDEXER_STATE_ID,
