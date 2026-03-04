@@ -1,3 +1,4 @@
+"use client";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { useWallet } from "@/context/wallet-context";
 import { Button } from "./ui/Button";
