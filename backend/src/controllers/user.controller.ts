@@ -70,6 +70,9 @@ export const getUser = async (req: Request, res: Response, next: NextFunction) =
 export const getUserEvents = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { publicKey } = req.params;
+        if (typeof publicKey !== 'string') {
+            return res.status(400).json({ error: 'Invalid publicKey parameter' });
+        }
 
         const events = await prisma.streamEvent.findMany({
             where: {

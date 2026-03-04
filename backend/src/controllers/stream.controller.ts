@@ -47,8 +47,8 @@ export const listStreams = async (req: Request, res: Response) => {
     const { sender, recipient } = req.query;
 
     const where: any = {};
-    if (sender) where.sender = sender as string;
-    if (recipient) where.recipient = recipient as string;
+    if (typeof sender === 'string') where.sender = sender;
+    if (typeof recipient === 'string') where.recipient = recipient;
 
     const streams = await prisma.stream.findMany({
       where,
