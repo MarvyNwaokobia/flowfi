@@ -65,12 +65,12 @@ export const ActivityHistory: React.FC<ActivityHistoryProps> = ({ events, isLoad
                             {event.eventType}
                         </div>
                     </div>
-                    {(event.txHash || event.transactionStatus) && (
+                    {event.transactionHash && (
                         <div className="mt-3">
                             <TransactionTracker
-                                status={event.transactionStatus || 'confirmed'}
-                                txHash={event.txHash}
-                                streamId={event.streamId}
+                                status="confirmed"
+                                txHash={event.transactionHash}
+                                streamId={event.streamId.toString()}
                             />
                         </div>
                     )}
