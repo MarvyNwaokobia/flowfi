@@ -117,6 +117,11 @@ export class SorobanEventWorker {
     logger.info('[SorobanWorker] Stopped.');
   }
 
+  /** Trigger an immediate poll cycle (used by indexer replay). */
+  async triggerPoll(): Promise<void> {
+    await this.fetchAndProcessEvents();
+  }
+
   // ─── Internal ──────────────────────────────────────────────────────────────
 
   private scheduleNext(): void {
