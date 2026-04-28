@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface StreamEvent {
   type: 'created' | 'topped_up' | 'withdrawn' | 'cancelled' | 'completed';
-  data: any;
+  data: unknown;
   timestamp: number;
 }
 
@@ -41,6 +41,7 @@ export function useStreamEvents(
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryDelayRef = useRef(1000);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const connectRef = useRef<() => void>(() => undefined);
 
   const buildUrl = useCallback(() => {
     const params = new URLSearchParams();
@@ -86,7 +87,7 @@ export function useStreamEvents(
     const handleEvent = (type: StreamEvent['type']) => (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        setEvents(prev => [
+        setEvents((prev: StreamEvent[]) => [
           { type, data, timestamp: Date.now() },
           ...prev.slice(0, 99), // Keep last 100 events
         ]);
@@ -110,7 +111,7 @@ export function useStreamEvents(
         setReconnecting(true);
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log(`Reconnecting in ${retryDelayRef.current}ms...`);
-          connect();
+          connectRef.current();
           retryDelayRef.current = Math.min(
             retryDelayRef.current * 2,
             maxRetryDelay
@@ -119,6 +120,10 @@ export function useStreamEvents(
       }
     };
   }, [buildUrl, autoReconnect, maxRetryDelay]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();

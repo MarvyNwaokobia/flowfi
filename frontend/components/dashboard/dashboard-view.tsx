@@ -329,7 +329,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const [modal, setModal] = React.useState<ModalState>(null);
 
   // SSE integration for real-time stream updates
-  const { events: streamEvents, connected: sseConnected } = useStreamEvents({
+  const { events: streamEvents } = useStreamEvents({
     userPublicKeys: [session.publicKey],
     autoReconnect: true,
   });

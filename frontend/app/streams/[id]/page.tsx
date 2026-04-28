@@ -28,13 +28,6 @@ interface StreamDetail {
   status: string;
 }
 
-interface Transaction {
-  id: string;
-  date: string;
-  amount: number;
-  type: "withdrawal" | "topup" | "cancel";
-}
-
 export default function StreamDetailsPage() {
   const params = useParams();
   const streamId = params.id as string;
