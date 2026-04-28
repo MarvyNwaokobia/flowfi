@@ -9,7 +9,11 @@ const subscribeSchema = z.object({
   all: z.boolean().optional().default(false),
 });
 
-export const subscribe = async (req: Request, res: Response) => {
+export const subscribe = (req: Request, res: Response) => {
+  if (sseService.isShuttingDown()) {
+    return res.status(503).json({ message: 'Server is shutting down, please reconnect shortly.' });
+  }
+
   try {
     const { publicKey } = (req as AuthenticatedRequest).user;
     const { streams, all } = subscribeSchema.parse(req.query);

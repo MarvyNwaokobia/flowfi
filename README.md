@@ -30,7 +30,7 @@ flowfi/
 
 FlowFi consists of three main components that work together:
 
-- **Soroban Smart Contracts**: Handle on-chain payment stream logic
+- **Soroban Smart Contracts**: Handle on-chain payment stream logic.
 - **Backend API**: Indexes on-chain events, provides REST API, and streams real-time updates via SSE
 - **Frontend**: User interface for creating and managing payment streams
 

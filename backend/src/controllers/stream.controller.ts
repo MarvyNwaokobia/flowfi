@@ -117,7 +117,7 @@ export const getStream = async (req: Request, res: Response) => {
 };
 
 /**
- * List events for a stream
+ * List events for a stream (paginated)
  */
 export const getStreamEvents = async (req: Request, res: Response) => {
   try {
@@ -130,12 +130,35 @@ export const getStreamEvents = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid streamId parameter' });
     }
 
-    const events = await prisma.streamEvent.findMany({
-      where: { streamId: parsedStreamId },
-      orderBy: { timestamp: 'desc' }
-    });
+    const rawLimit = req.query['limit'];
+    const rawOffset = req.query['offset'];
+    const cursor = typeof req.query['cursor'] === 'string' ? req.query['cursor'] : undefined;
+    const direction = req.query['direction'] === 'asc' ? 'asc' as const : 'desc' as const;
 
-    return res.status(200).json(events);
+    const limit = Math.min(
+      rawLimit && typeof rawLimit === 'string' ? (Number.parseInt(rawLimit, 10) || 50) : 50,
+      500,
+    );
+    const offset =
+      rawOffset && typeof rawOffset === 'string' ? (Number.parseInt(rawOffset, 10) || 0) : 0;
+
+    const [events, total] = await Promise.all([
+      prisma.streamEvent.findMany({
+        where: { streamId: parsedStreamId },
+        orderBy: { createdAt: direction },
+        take: limit,
+        ...(cursor
+          ? { cursor: { id: cursor }, skip: 1 }
+          : { skip: offset }),
+      }),
+      prisma.streamEvent.count({ where: { streamId: parsedStreamId } }),
+    ]);
+
+    const hasMore = cursor
+      ? events.length === limit
+      : offset + events.length < total;
+
+    return res.status(200).json({ data: events, total, hasMore });
   } catch (error) {
     logger.error('Error fetching stream events:', error);
     return res.status(500).json({ error: 'Internal server error' });

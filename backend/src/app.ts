@@ -188,15 +188,31 @@ app.get('/health', async (req: Request, res: Response) => {
     let dbStatus = 'healthy';
     try {
         await prisma.$queryRaw`SELECT 1`;
-    } catch (error) {
+    } catch {
         dbStatus = 'unhealthy';
+    }
+
+    let indexerStatus = 'unknown';
+    let indexerLastLedger: number | null = null;
+    try {
+        const state = await prisma.indexerState.findUnique({ where: { id: 'singleton' } });
+        if (state) {
+            indexerLastLedger = state.lastLedger;
+            indexerStatus = 'running';
+        } else {
+            indexerStatus = 'not_started';
+        }
+    } catch {
+        indexerStatus = 'error';
     }
 
     const status = dbStatus === 'healthy' ? 'healthy' : 'unhealthy';
     res.status(status === 'healthy' ? 200 : 503).json({
         status,
-        timestamp: new Date().toISOString(),
+        db: dbStatus,
+        indexer: { status: indexerStatus, lastLedger: indexerLastLedger },
         uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
         version: '1.0.0',
         apiVersions: {
             supported: ['v1'],

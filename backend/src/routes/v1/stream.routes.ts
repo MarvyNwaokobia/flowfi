@@ -152,8 +152,13 @@ router.get('/:streamId', getStream);
  *   get:
  *     tags:
  *       - Streams
- *     summary: List stream events
- *     description: Retrieve all events associated with a specific stream.
+ *     summary: List stream events (paginated)
+ *     description: |
+ *       Retrieve events for a specific stream with offset- or cursor-based pagination.
+ *
+ *       **Offset pagination:** Use `limit` and `offset`.
+ *       **Cursor pagination:** Use `cursor=<eventId>` and `direction`. The cursor record
+ *       itself is excluded; events immediately after (asc) or before (desc) it are returned.
  *     parameters:
  *       - in: path
  *         name: streamId
@@ -161,15 +166,55 @@ router.get('/:streamId', getStream);
  *         schema:
  *           type: integer
  *         description: On-chain stream ID
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 500
+ *         description: Maximum number of events to return (default 50, max 500)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of events to skip (offset pagination)
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *         description: Event ID to use as pagination cursor (cursor-based pagination)
+ *       - in: query
+ *         name: direction
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort direction (default desc)
  *     responses:
  *       200:
- *         description: List of stream events
+ *         description: Paginated list of stream events
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/StreamEvent'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/StreamEvent'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of events for this stream
+ *                   example: 120
+ *                 hasMore:
+ *                   type: boolean
+ *                   description: Whether more events exist beyond the current page
+ *                   example: true
+ *       400:
+ *         description: Invalid streamId
+ *       404:
+ *         description: Stream not found
  */
 router.get('/:streamId/events', getStreamEvents);
 

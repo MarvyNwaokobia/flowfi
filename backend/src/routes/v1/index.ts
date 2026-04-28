@@ -4,6 +4,7 @@ import eventsRoutes from './events.routes.js';
 import userRoutes from './user.routes.js';
 import authRoutes from './auth.routes.js';
 import adminRoutes from './admin.routes.js';
+import adminRoutes from '../adminRoutes.js';
 
 const router = Router();
 

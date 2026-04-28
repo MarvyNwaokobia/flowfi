@@ -37,6 +37,7 @@ import {
   toSorobanErrorMessage,
 } from "@/lib/soroban";
 import IncomingStreams from "../IncomingStreams";
+import { useStreamEvents } from "@/hooks/useStreamEvents";
 import {
   StreamCreationWizard,
   type StreamFormData,
@@ -326,6 +327,30 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const [activeTab, setActiveTab] = React.useState("overview");
   const [showWizard, setShowWizard] = React.useState(false);
   const [modal, setModal] = React.useState<ModalState>(null);
+
+  // SSE integration for real-time stream updates
+  const { events: streamEvents } = useStreamEvents({
+    userPublicKeys: [session.publicKey],
+    autoReconnect: true,
+  });
+
+  // Refresh dashboard when SSE events arrive
+  React.useEffect(() => {
+    if (streamEvents.length > 0) {
+      const latestEvent = streamEvents[0];
+      console.log('SSE event received:', latestEvent);
+      // Refresh dashboard data on relevant events
+      if (latestEvent.type === 'created' || latestEvent.type === 'topped_up' || 
+          latestEvent.type === 'withdrawn' || latestEvent.type === 'cancelled' ||
+          latestEvent.type === 'completed') {
+        fetchDashboardData(session.publicKey)
+          .then(setSnapshot)
+          .catch(err => {
+            setSnapshotError(err instanceof Error ? err.message : 'Failed to refresh dashboard');
+          });
+      }
+    }
+  }, [streamEvents, session.publicKey]);
 
   // --- Templates State (from upstream) ---
   const [streamForm, setStreamForm] = React.useState<StreamFormValues>(

@@ -948,6 +948,43 @@ fn test_cancel_stream_after_partial_withdrawal() {
     assert_eq!(contract_balance_after, 0);
 }
 
+#[test]
+fn test_claimable_max_i128_rate_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (token, _) = create_token(&env);
+    let sender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    mint(&env, &token, &sender, i128::MAX);
+
+    let client = create_contract(&env);
+
+    // Create stream with near-max i128 rate
+    let max_rate = i128::MAX / 2;
+    let stream_id = client.create_stream(&sender, &recipient, &token, &1_000, &1);
+
+    // Manually set rate to near-max i128 to test overflow protection
+    let mut stream = client.get_stream(&stream_id).unwrap();
+    stream.rate_per_second = max_rate;
+    env.as_contract(&client.address, || {
+        env.storage().persistent().set(&types::DataKey::Stream(stream_id), &stream);
+    });
+
+    // Advance time by a large amount that would cause overflow
+    env.ledger().with_mut(|l| {
+        l.timestamp += 1_000_000_000;
+    });
+
+    // get_claimable_amount should cap at deposited_amount, not overflow
+    let claimable = client.get_claimable_amount(&stream_id).unwrap();
+    assert_eq!(claimable, 1_000); // Should cap at deposited amount
+
+    // Withdraw should work correctly without overflow
+    let withdrawn = client.withdraw(&recipient, &stream_id);
+    assert_eq!(withdrawn, 1_000);
+}
+
 // ─── #232 create_stream edge cases ───────────────────────────────────────────
 
 #[test]

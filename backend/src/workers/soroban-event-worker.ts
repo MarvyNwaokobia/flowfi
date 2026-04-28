@@ -74,6 +74,7 @@ export class SorobanEventWorker {
 
   private isRunning = false;
   private pollTimer: NodeJS.Timeout | undefined;
+  private activeBatch: Promise<void> | null = null;
 
   constructor() {
     const rpcUrl =
@@ -117,9 +118,9 @@ export class SorobanEventWorker {
     logger.info('[SorobanWorker] Stopped.');
   }
 
-  /** Trigger an immediate poll cycle (used by indexer replay). */
-  async triggerPoll(): Promise<void> {
-    await this.fetchAndProcessEvents();
+  /** Wait for the currently-running poll batch to finish (no-op if idle). */
+  async waitForDrain(): Promise<void> {
+    if (this.activeBatch) await this.activeBatch;
   }
 
   // ─── Internal ──────────────────────────────────────────────────────────────
@@ -130,11 +131,13 @@ export class SorobanEventWorker {
   }
 
   private async poll(): Promise<void> {
-    try {
-      await this.fetchAndProcessEvents();
-    } catch (err) {
+    this.activeBatch = this.fetchAndProcessEvents().catch((err) => {
       logger.error('[SorobanWorker] Unhandled error during poll:', err);
+    });
+    try {
+      await this.activeBatch;
     } finally {
+      this.activeBatch = null;
       this.scheduleNext();
     }
   }

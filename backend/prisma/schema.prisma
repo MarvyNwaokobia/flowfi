@@ -78,4 +78,6 @@ model StreamEvent {
   @@index([eventType])
   @@index([timestamp])
   @@index([transactionHash])
+  @@index([createdAt])
+  @@index([streamId, createdAt])
 }
