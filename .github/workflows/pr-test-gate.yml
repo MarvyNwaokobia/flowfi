@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --include=optional
 
+      - name: Install Rollup Native Binding
+        run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
       - name: Prepare database schema
         run: |
           npx prisma generate --schema=prisma/schema.prisma
