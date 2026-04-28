@@ -9,12 +9,35 @@ const subscribeSchema = z.object({
   all: z.boolean().optional().default(false),
 });
 
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+    return forwarded.split(',')[0]?.trim() || 'unknown';
+  }
+
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0] ?? 'unknown';
+  }
+
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
 export const subscribe = async (req: Request, res: Response) => {
   if (sseService.isShuttingDown()) {
     return res.status(503).json({ message: 'Server is shutting down, please reconnect shortly.' });
   }
 
   try {
+    const sourceIp = getClientIp(req);
+    const capacity = sseService.checkCapacity(sourceIp);
+    if (!capacity.allowed) {
+      if (capacity.retryAfterSeconds) {
+        res.setHeader('Retry-After', String(capacity.retryAfterSeconds));
+      }
+      return res.status(capacity.status ?? 503).json({
+        message: capacity.message ?? 'SSE connection rejected',
+      });
+    }
+
     const { publicKey } = (req as AuthenticatedRequest).user;
     const { streams, all } = subscribeSchema.parse(req.query);
 
@@ -50,7 +73,7 @@ export const subscribe = async (req: Request, res: Response) => {
 
     res.write(`data: ${JSON.stringify({ type: 'connected', clientId })}\n\n`);
 
-    sseService.addClient(clientId, res, subscriptions);
+    sseService.addClient(clientId, res, subscriptions, sourceIp);
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return res.status(400).json({
