@@ -26,6 +26,7 @@
     "@stellar/stellar-sdk": "^14.5.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
+    "esbuild": "0.28.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "ioredis": "^5.3.2",
