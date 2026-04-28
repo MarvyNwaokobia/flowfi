@@ -68,6 +68,8 @@ export async function getStreamFromChain(streamId: number): Promise<ChainStream 
       nativeToScVal(streamId, { type: 'u64' }),
     ]);
     const fields = decodeMap(retval);
+    const isActiveVal = fields['is_active']!;
+    const isActive = isActiveVal.b() !== undefined;
     return {
       streamId,
       sender: decodeAddress(fields['sender']!),
@@ -77,7 +79,7 @@ export async function getStreamFromChain(streamId: number): Promise<ChainStream 
       depositedAmount: decodeI128(fields['deposited_amount']!),
       withdrawnAmount: decodeI128(fields['withdrawn_amount']!),
       startTime: Number(fields['start_time']!.u64().toString()),
-      isActive: fields['is_active']!.bool(),
+      isActive,
     };
   } catch (err) {
     logger.error(`[SorobanService] getStreamFromChain(${streamId}) failed:`, err);
