@@ -6,6 +6,7 @@ export interface ClaimableStreamState {
   ratePerSecond: string;
   depositedAmount: string;
   withdrawnAmount: string;
+  startTime: number;
   lastUpdateTime: number;
   isActive: boolean;
   isPaused: boolean;
@@ -63,8 +64,12 @@ function getStateFingerprint(stream: ClaimableStreamState): string {
     stream.ratePerSecond,
     stream.depositedAmount,
     stream.withdrawnAmount,
+    stream.startTime,
     stream.lastUpdateTime,
     stream.isActive ? '1' : '0',
+    stream.isPaused ? '1' : '0',
+    stream.pausedAt ?? 'null',
+    stream.totalPausedDuration,
   ].join(':');
 }
 
@@ -109,15 +114,19 @@ export class ClaimableAmountService {
       };
     }
 
-    const streamLastUpdate = BigInt(Math.max(0, stream.lastUpdateTime));
+    const streamStart = BigInt(Math.max(0, stream.startTime));
     const nowTs = BigInt(Math.max(0, calculatedAt));
-    let elapsed = nowTs > streamLastUpdate ? nowTs - streamLastUpdate : 0n;
-    
-    // Subtract total paused duration from elapsed time
-    // Only if stream is currently active (not paused)
-    if (!stream.isPaused && stream.totalPausedDuration > 0) {
-      const pausedDuration = BigInt(Math.max(0, stream.totalPausedDuration));
-      elapsed = elapsed > pausedDuration ? elapsed - pausedDuration : 0n;
+    let elapsed = nowTs > streamStart ? nowTs - streamStart : 0n;
+
+    const pastPausedDuration = BigInt(Math.max(0, stream.totalPausedDuration));
+    elapsed = elapsed > pastPausedDuration ? elapsed - pastPausedDuration : 0n;
+
+    if (stream.isPaused && stream.pausedAt !== null) {
+      const currentPauseStart = BigInt(Math.max(0, stream.pausedAt));
+      if (nowTs > currentPauseStart) {
+        const currentPauseDuration = nowTs - currentPauseStart;
+        elapsed = elapsed > currentPauseDuration ? elapsed - currentPauseDuration : 0n;
+      }
     }
 
     const ratePerSecond = parseI128(stream.ratePerSecond, 'ratePerSecond');

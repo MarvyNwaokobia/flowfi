@@ -10,7 +10,7 @@ const INDEXER_STATE_ID = 'singleton';
 // ─── XDR Decoding Helpers ────────────────────────────────────────────────────
 
 /** Decode an ScVal symbol to a string. */
-function decodeSymbol(val: xdr.ScVal): string {
+export function decodeSymbol(val: xdr.ScVal): string {
   return val.sym().toString();
 }
 
@@ -18,7 +18,7 @@ function decodeSymbol(val: xdr.ScVal): string {
  * Decode an ScVal U64 to a JavaScript bigint.
  * `xdr.UInt64` extends Long; `.toString()` gives the decimal representation.
  */
-function decodeU64(val: xdr.ScVal): bigint {
+export function decodeU64(val: xdr.ScVal): bigint {
   return BigInt(val.u64().toString());
 }
 
@@ -27,7 +27,7 @@ function decodeU64(val: xdr.ScVal): bigint {
  * I128 in XDR is split into hi (signed Int64) and lo (unsigned Uint64).
  * Full value = hi * 2^64 + lo.
  */
-function decodeI128(val: xdr.ScVal): string {
+export function decodeI128(val: xdr.ScVal): string {
   const parts = val.i128();
   const hi = BigInt.asIntN(64, BigInt(parts.hi().toString()));
   const lo = BigInt.asUintN(64, BigInt(parts.lo().toString()));
@@ -38,7 +38,7 @@ function decodeI128(val: xdr.ScVal): string {
  * Decode an ScVal Address to a Stellar public key (G...) or contract (C...)
  * string.
  */
-function decodeAddress(val: xdr.ScVal): string {
+export function decodeAddress(val: xdr.ScVal): string {
   const addr = val.address();
   if (
     addr.switch().value ===
@@ -54,7 +54,7 @@ function decodeAddress(val: xdr.ScVal): string {
  * Decode an ScVal Map (a `#[contracttype]` struct) into a plain object keyed
  * by field name with raw ScVal values for further decoding.
  */
-function decodeMap(val: xdr.ScVal): Record<string, xdr.ScVal> {
+export function decodeMap(val: xdr.ScVal): Record<string, xdr.ScVal> {
   const result: Record<string, xdr.ScVal> = {};
   const entries = val.map();
   if (!entries) return result;
@@ -301,6 +301,10 @@ export class SorobanEventWorker {
     const ratePerSecond = decodeI128(body['rate_per_second']);
     const depositedAmount = decodeI128(body['deposited_amount']);
     const startTime = Number(decodeU64(body['start_time']));
+    
+    // Compute expected end time (assuming no pauses yet)
+    const durationSeconds = Number(BigInt(depositedAmount) / BigInt(ratePerSecond));
+    const endTime = startTime + durationSeconds;
 
     await prisma.$transaction(async (tx: any) => {
       await tx.user.upsert({
@@ -325,6 +329,7 @@ export class SorobanEventWorker {
           depositedAmount,
           withdrawnAmount: '0',
           startTime,
+          endTime,
           lastUpdateTime: startTime,
           isActive: true,
         },
@@ -333,6 +338,7 @@ export class SorobanEventWorker {
           ratePerSecond,
           depositedAmount,
           startTime,
+          endTime,
           lastUpdateTime: startTime,
           isActive: true,
         },
@@ -380,10 +386,19 @@ export class SorobanEventWorker {
     const timestamp = Math.floor(Date.now() / 1000);
 
     await prisma.$transaction(async (tx: any) => {
+      const stream = await tx.stream.findUniqueOrThrow({
+        where: { streamId },
+        select: { ratePerSecond: true, startTime: true, totalPausedDuration: true }
+      });
+      
+      const durationSeconds = Number(BigInt(newDepositedAmount) / BigInt(stream.ratePerSecond));
+      const newEndTime = stream.startTime + durationSeconds + stream.totalPausedDuration;
+
       await tx.stream.update({
         where: { streamId },
         data: {
           depositedAmount: newDepositedAmount,
+          endTime: newEndTime,
           lastUpdateTime: timestamp,
         },
       });
@@ -597,6 +612,111 @@ export class SorobanEventWorker {
       treasury,
       feeAmount,
       token,
+      transactionHash: event.txHash,
+      ledger: event.ledger,
+      timestamp,
+    }, (client) => client.subscriptions.has('admin') || client.subscriptions.has('*'));
+  }
+
+  private async handleStreamPaused(
+    event: rpc.Api.EventResponse,
+    streamIdTopic: xdr.ScVal,
+  ): Promise<void> {
+    const streamId = Number(decodeU64(streamIdTopic));
+    const body = decodeMap(event.value);
+
+    if (!body['sender'] || !body['paused_at']) {
+      throw new Error(`StreamPaused #${streamId}: missing body fields`);
+    }
+
+    const sender = decodeAddress(body['sender']);
+    const pausedAt = Number(decodeU64(body['paused_at']));
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.stream.update({
+        where: { streamId },
+        data: {
+          isPaused: true,
+          pausedAt,
+          lastUpdateTime: pausedAt,
+        },
+      });
+
+      await tx.streamEvent.create({
+        data: {
+          streamId,
+          eventType: 'PAUSED',
+          transactionHash: event.txHash,
+          ledgerSequence: event.ledger,
+          timestamp: pausedAt,
+          metadata: JSON.stringify({ sender }),
+        },
+      });
+    });
+
+    sseService.broadcastToStream(String(streamId), 'stream.paused', {
+      streamId,
+      sender,
+      pausedAt,
+      transactionHash: event.txHash,
+      ledger: event.ledger,
+      timestamp: pausedAt,
+    });
+  }
+
+  private async handleStreamResumed(
+    event: rpc.Api.EventResponse,
+    streamIdTopic: xdr.ScVal,
+  ): Promise<void> {
+    const streamId = Number(decodeU64(streamIdTopic));
+    const body = decodeMap(event.value);
+
+    if (!body['sender'] || !body['new_end_time']) {
+      throw new Error(`StreamResumed #${streamId}: missing body fields`);
+    }
+
+    const sender = decodeAddress(body['sender']);
+    const newEndTime = Number(decodeU64(body['new_end_time']));
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    await prisma.$transaction(async (tx: any) => {
+      const stream = await tx.stream.findUniqueOrThrow({
+        where: { streamId },
+        select: { pausedAt: true, totalPausedDuration: true },
+      });
+
+      const pausedAt = stream.pausedAt || timestamp;
+      const pausedDuration = timestamp - pausedAt;
+
+      await tx.stream.update({
+        where: { streamId },
+        data: {
+          isPaused: false,
+          pausedAt: null,
+          endTime: newEndTime,
+          totalPausedDuration: {
+            increment: pausedDuration,
+          },
+          lastUpdateTime: timestamp,
+        },
+      });
+
+      await tx.streamEvent.create({
+        data: {
+          streamId,
+          eventType: 'RESUMED',
+          transactionHash: event.txHash,
+          ledgerSequence: event.ledger,
+          timestamp,
+          metadata: JSON.stringify({ sender, newEndTime, pausedDuration }),
+        },
+      });
+    });
+
+    sseService.broadcastToStream(String(streamId), 'stream.resumed', {
+      streamId,
+      sender,
+      newEndTime,
       transactionHash: event.txHash,
       ledger: event.ledger,
       timestamp,
