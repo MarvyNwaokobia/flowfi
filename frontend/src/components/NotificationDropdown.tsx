@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStreamEvents } from '@/hooks/useStreamEvents';
 import { formatAmount } from '@/lib/amount';
 import { Button } from './ui/Button';
+import { useStreamEvents } from '@/hooks/useStreamEvents';
 
 interface NotificationDropdownProps {
     publicKey: string;
@@ -50,6 +51,20 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ publ
                 return `Stream #${streamId} was resumed`;
             default:
                 return `Activity on stream #${streamId}`;
+    const [events, setEvents] = useState<BackendStreamEvent[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Wire up SSE for real-time events
+    const { events: streamEvents } = useStreamEvents({
+        userPublicKeys: [publicKey],
+        autoReconnect: true,
+    });
+
+    useEffect(() => {
+        if (isOpen && publicKey) {
+            loadEvents();
+            setUnreadCount(0); // Clear unread count when dropdown opens
         }
     }, []);
 
@@ -76,6 +91,52 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ publ
                     return unique.slice(0, 20);
                 });
             }, 0);
+    // Handle incoming SSE events
+    useEffect(() => {
+        if (streamEvents.length > 0 && !isOpen) {
+            // Increment unread count for new events while dropdown is closed
+            setUnreadCount(prev => prev + 1);
+        }
+
+        // Prepend live events to notification list
+        if (streamEvents.length > 0) {
+            const latestEvent = streamEvents[0];
+            const newEvent: BackendStreamEvent = {
+                id: `sse-${Date.now()}`,
+                streamId: latestEvent.data.streamId || 0,
+                eventType: mapEventType(latestEvent.type),
+                amount: latestEvent.data.amount || latestEvent.data.feeAmount || null,
+                transactionHash: latestEvent.data.transactionHash || '',
+                ledgerSequence: latestEvent.data.ledger || 0,
+                timestamp: latestEvent.timestamp / 1000,
+                metadata: null,
+                createdAt: new Date().toISOString(),
+            };
+
+            setEvents(prev => [newEvent, ...prev.slice(0, 19)]); // Keep max 20
+        }
+    }, [streamEvents, isOpen]);
+
+    const mapEventType = (type: string): BackendStreamEvent['eventType'] => {
+        switch (type) {
+            case 'created': return 'CREATED';
+            case 'topped_up': return 'TOPPED_UP';
+            case 'withdrawn': return 'WITHDRAWN';
+            case 'cancelled': return 'CANCELLED';
+            case 'completed': return 'COMPLETED';
+            default: return 'CREATED';
+        }
+    };
+
+    const loadEvents = async () => {
+        setIsLoading(true);
+        try {
+            const data = await fetchUserEvents(publicKey);
+            setEvents(data.slice(0, 20)); // Show last 20
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
         }
     }, [events, formatEventMessage]);
 
@@ -89,6 +150,15 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ publ
         setIsOpen(true);
         if (unreadCount > 0) {
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const formatEventMessage = (event: BackendStreamEvent) => {
+        const amount = event.amount ? parseFloat(event.amount) / 1e7 : 0;
+        switch (event.eventType) {
+            case 'CREATED': return `New stream #${event.streamId}`;
+            case 'TOPPED_UP': return `Topped up #${event.streamId}`;
+            case 'WITHDRAWN': return `Withdrew ${amount} from #${event.streamId}`;
+            case 'CANCELLED': return `Cancelled #${event.streamId}`;
+            case 'COMPLETED': return `Completed #${event.streamId}`;
+            default: return `Event on #${event.streamId}`;
         }
     }, [unreadCount]);
 
@@ -111,6 +181,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ publ
                 )}
                 {!connected && (
                     <span className="absolute bottom-0 right-0 h-2 w-2 bg-red-500 rounded-full border-2 border-background"></span>
+                    <span className="absolute top-0 right-0 h-5 w-5 bg-accent rounded-full border-2 border-background flex items-center justify-center text-xs font-bold text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
                 )}
             </button>
 
