@@ -18,9 +18,9 @@ export default function LiveCounter({
   const [amount, setAmount] = useState(initial);
 
   useEffect(() => {
-    // Reset amount when initial value changes
+    // Reset amount when initial value changes or when paused
     setAmount(initial);
-  }, [initial]);
+  }, [initial, isPaused]);
 
   useEffect(() => {
     // Don't increment if paused
@@ -36,7 +36,7 @@ export default function LiveCounter({
   }, [initial, isPaused]);
 
   const formatPausedTime = (pausedAtStr: string | undefined): string => {
-    if (!pausedAtStr) return "";
+    if (!pausedAtStr) return "Paused";
     try {
       const pausedDate = new Date(pausedAtStr);
       const now = new Date();
@@ -88,7 +88,10 @@ export default function LiveCounter({
 
       <p style={{ margin: 0, fontSize: "0.92rem", color: "var(--text-muted)" }}>
         {isPaused ? (
-          formatPausedTime(pausedAt)
+          <>
+            <span style={{ color: '#ef4444', fontWeight: 600 }}>{formatPausedTime(pausedAt)}</span>
+            <span style={{ marginLeft: '0.5rem' }}>({amount.toLocaleString()})</span>
+          </>
         ) : (
           <>
             {label}:{" "}
