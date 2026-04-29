@@ -7,7 +7,9 @@ import { prisma } from '../../lib/prisma.js';
 import { sorobanEventWorker } from '../../workers/soroban-event-worker.js';
 import { sseService } from '../../services/sse.service.js';
 
-describe('Stream Lifecycle Integration Tests', () => {
+const describeIfDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+
+describeIfDatabase('Stream Lifecycle Integration Tests', () => {
   const senderPair = Keypair.random();
   const recipientPair = Keypair.random();
   const sender = senderPair.publicKey();
@@ -146,7 +148,16 @@ describe('Stream Lifecycle Integration Tests', () => {
         xdr.ScVal.scvSymbol('stream_paused'),
         nativeToScVal(BigInt(streamId), { type: 'u64' }),
       ],
-      value: xdr.ScVal.scvMap([]),
+      value: xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol('sender'),
+          val: nativeToScVal(sender, { type: 'address' }),
+        }),
+        new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol('paused_at'),
+          val: nativeToScVal(BigInt(Math.floor(Date.now() / 1000)), { type: 'u64' }),
+        }),
+      ]),
     } as any;
 
     await sorobanEventWorker.processEvent(event);
@@ -169,7 +180,16 @@ describe('Stream Lifecycle Integration Tests', () => {
         xdr.ScVal.scvSymbol('stream_resumed'),
         nativeToScVal(BigInt(streamId), { type: 'u64' }),
       ],
-      value: xdr.ScVal.scvMap([]),
+      value: xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol('sender'),
+          val: nativeToScVal(sender, { type: 'address' }),
+        }),
+        new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol('new_end_time'),
+          val: nativeToScVal(BigInt(Math.floor(Date.now() / 1000) + 60), { type: 'u64' }),
+        }),
+      ]),
     } as any;
 
     await sorobanEventWorker.processEvent(event);

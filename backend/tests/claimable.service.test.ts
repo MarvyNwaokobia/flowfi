@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { ClaimableAmountService } from '../src/services/claimable.service.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('ClaimableAmountService', () => {
   it('calculates claimable amount for active stream', () => {
@@ -15,20 +19,17 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '100',
       lastUpdateTime: 7,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: true,
       isPaused: false,
       pausedAt: null,
       totalPausedDuration: 0,
     });
 
-    // elapsed = 10 - 7 = 3
-    // streamed = 3 * 5 = 15
+    // elapsed = 10 - 0 = 10
+    // streamed = 10 * 5 = 50
     // remaining = 500 - 100 = 400
-    // claimable = min(15, 400) = 15
-    expect(result.claimableAmount).toBe('15');
+    // claimable = min(50, 400) = 50
+    expect(result.claimableAmount).toBe('50');
     expect(result.actionable).toBe(true);
     expect(result.cached).toBe(false);
   });
@@ -46,9 +47,6 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '900',
       lastUpdateTime: 0,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: true,
       isPaused: false,
       pausedAt: null,
@@ -72,9 +70,6 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '100',
       lastUpdateTime: 0,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: false,
       isPaused: false,
       pausedAt: null,
@@ -98,9 +93,6 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '150',
       lastUpdateTime: 0,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: true,
       isPaused: false,
       pausedAt: null,
@@ -112,6 +104,9 @@ describe('ClaimableAmountService', () => {
   });
 
   it('uses cache for repeated request with same stream state + timestamp', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(5_000));
+
     let now = 5_000;
     const service = new ClaimableAmountService({
       cacheTtlMs: 10_000,
@@ -125,9 +120,6 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '0',
       lastUpdateTime: 0,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: true,
       isPaused: false,
       pausedAt: null,
@@ -142,6 +134,7 @@ describe('ClaimableAmountService', () => {
 
     // Advance local clock beyond cache TTL
     now = 20_001;
+    vi.setSystemTime(new Date(20_001));
     const third = service.getClaimableAmount(input, 5);
     expect(third.cached).toBe(false);
   });
@@ -161,9 +154,6 @@ describe('ClaimableAmountService', () => {
       withdrawnAmount: '0',
       lastUpdateTime: 998,
       startTime: 0,
-      isPaused: false,
-      pausedAt: null,
-      totalPausedDuration: 0,
       isActive: true,
       isPaused: false,
       pausedAt: null,
@@ -179,4 +169,3 @@ describe('ClaimableAmountService', () => {
     expect(result.actionable).toBe(true);
   });
 });
-

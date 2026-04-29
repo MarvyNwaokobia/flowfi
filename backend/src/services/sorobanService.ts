@@ -199,3 +199,35 @@ export async function resumeStream(
     throw new Error(`Failed to resume stream: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 }
+
+/**
+ * Withdraw from a stream. Calls the Soroban contract's withdraw function.
+ * Note: This simulates the contract call and returns a placeholder tx hash,
+ * matching the current pause/resume backend pattern.
+ */
+export async function withdrawStream(
+  recipientAddress: string,
+  streamId: number,
+): Promise<PauseResumeResult> {
+  if (!CONTRACT_ID) {
+    throw new Error('Stream contract ID not configured');
+  }
+
+  try {
+    const { Address } = await import('@stellar/stellar-sdk');
+
+    const recipient = new Address(recipientAddress);
+
+    await simulateContractCall('withdraw', [
+      recipient.toScVal(),
+      nativeToScVal(streamId, { type: 'u64' }),
+    ]);
+
+    return {
+      txHash: 'simulated-withdraw-' + streamId,
+    };
+  } catch (err) {
+    logger.error(`[SorobanService] withdrawStream(${streamId}) failed:`, err);
+    throw new Error(`Failed to withdraw from stream: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}

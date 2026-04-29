@@ -36,7 +36,7 @@ export default function LiveCounter({
   }, [initial, isPaused]);
 
   const formatPausedTime = (pausedAtStr: string | undefined): string => {
-    if (!pausedAtStr) return "";
+    if (!pausedAtStr) return "Paused";
     try {
       const pausedDate = new Date(pausedAtStr);
       const now = new Date();
