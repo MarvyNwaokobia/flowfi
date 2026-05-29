@@ -20,6 +20,8 @@ const { mockPrisma, mockSseService } = vi.hoisted(() => ({
     },
     streamEvent: {
       create: vi.fn(),
+      upsert: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),

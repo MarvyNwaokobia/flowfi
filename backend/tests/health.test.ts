@@ -2,12 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 
 // Prisma mock — replaced per test to simulate DB up/down and indexer state.
-const prismaMock = {
-  $queryRaw: vi.fn(),
-  indexerState: {
-    findUnique: vi.fn(),
+// Defined via vi.hoisted so it exists when the hoisted vi.mock factory runs.
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    $queryRaw: vi.fn(),
+    indexerState: {
+      findUnique: vi.fn(),
+    },
   },
-};
+}));
 
 vi.mock('../src/lib/prisma.js', () => ({
   prisma: prismaMock,
